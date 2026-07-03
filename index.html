@@ -359,7 +359,7 @@
   const DIFFICULTIES = {
     easy:   { hearts: 3, speedFactor: 0.72, maxBlockedLanes: 2, waveIntervalMult: 1.7, laneChangeRate: 0 },
     medium: { hearts: 2, speedFactor: 1.00, maxBlockedLanes: 3, waveIntervalMult: 1.00, laneChangeRate: 0.045 },
-    hard:   { hearts: 1, speedFactor: 1.25, maxBlockedLanes: 3, waveIntervalMult: 0.80, laneChangeRate: 0.09 },
+    hard:   { hearts: 1, speedFactor: 1.25, maxBlockedLanes: 3, waveIntervalMult: 0.80, laneChangeRate: 0.16 },
   };
   let selectedDifficulty = 'medium';
   const diffButtons = Array.from(document.querySelectorAll('.diff-btn'));
@@ -1116,21 +1116,20 @@
       if (c.laneChangeStart != null){
         if (s.elapsed - c.laneChangeStart >= c.laneChangeDur) c.laneChangeStart = null;
       } else if ((s.laneChangeRate||0) > 0 && LANE_CHANGE_TYPES[c.type] && c.z > 180 && c.z < 850){
-        c.laneChangeCooldown = (c.laneChangeCooldown||0) - dt;
-        if (c.laneChangeCooldown <= 0){
-          c.laneChangeCooldown = 3 + Math.random()*4;
-          if (Math.random() < dt * s.laneChangeRate){
-            const dir = Math.random() < 0.5 ? -1 : 1;
-            const target = c.lane + dir;
-            if (target >= 0 && target < LANES){
-              const clear = !s.traffic.some(o => o !== c && !o.knocked && o.lane === target &&
-                Math.abs(o.z - c.z) < (c.h/2 + o.h/2 + MIN_GAP_BUFFER + 25));
-              if (clear){
-                c.fromLane = c.lane;
-                c.lane = target;
-                c.laneChangeStart = s.elapsed;
-                c.laneChangeDur = 0.8 + Math.random()*0.4;
-              }
+        if (c.laneChangeCooldown > 0){
+          c.laneChangeCooldown -= dt;
+        } else if (Math.random() < dt * s.laneChangeRate){
+          const dir = Math.random() < 0.5 ? -1 : 1;
+          const target = c.lane + dir;
+          if (target >= 0 && target < LANES){
+            const clear = !s.traffic.some(o => o !== c && !o.knocked && o.lane === target &&
+              Math.abs(o.z - c.z) < (c.h/2 + o.h/2 + MIN_GAP_BUFFER + 25));
+            if (clear){
+              c.fromLane = c.lane;
+              c.lane = target;
+              c.laneChangeStart = s.elapsed;
+              c.laneChangeDur = 0.8 + Math.random()*0.4;
+              c.laneChangeCooldown = 4 + Math.random()*3;
             }
           }
         }
@@ -1247,6 +1246,10 @@
         else if (s.targetLane >= LANES-1) dir = -1;
         else dir = Math.random() < 0.5 ? -1 : 1;
         changeLane(s, dir);
+        // the pothole itself never costs a heart -- it only disorients you into another lane;
+        // a brief grace window stops the forced swerve from being an instant, unavoidable hit,
+        // while still leaving real risk if you land next to traffic and don't react
+        s.invuln = Math.max(s.invuln, 0.3);
         s.shakeTimer = Math.max(s.shakeTimer, 0.25);
         spawnPopup(s, laneX(ph.lane), playerScreenY()-30, 'ЯМА', '#ffb74d');
         if (!s.demo) sfxKnock();
