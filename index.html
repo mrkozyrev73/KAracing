@@ -111,29 +111,35 @@
   #pauseBtn { left: 12px; }
   #pauseBtn.hidden { display: none !important; }
 
-  #touchControls {
-    position: absolute; bottom: 58px; left: 0; right: 0; display: flex;
-    justify-content: space-between; padding: 0 22px; pointer-events: none; z-index: 15;
-  }
-  #touchControls.hidden { display: none !important; }
-  .dir-btn {
-    width: 74px; height: 74px; border-radius: 50%; border: 2px solid rgba(255,255,255,.35);
-    background: rgba(255,255,255,.12); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
-    color: #fff; font-size: 27px; display: flex; align-items: center; justify-content: center;
-    pointer-events: auto; user-select: none;
-  }
-  .dir-btn:active { background: rgba(255,255,255,.3); transform: scale(0.92); }
-
   #pedalControls {
-    position: absolute; bottom: 144px; left: 0; right: 0; display: flex;
-    justify-content: space-between; padding: 0 26px; pointer-events: none; z-index: 15;
+    position: absolute; bottom: 20px; left: 0; right: 0; display: flex;
+    justify-content: center; gap: 26px; padding: 0 26px; pointer-events: none; z-index: 15;
   }
   #pedalControls.hidden { display: none !important; }
+
+  #rocketBtn {
+    position: absolute; bottom: 106px; left: 50%; transform: translateX(-50%);
+    width: 62px; height: 62px; border-radius: 50%; padding: 4px; border: none; cursor: pointer;
+    background: conic-gradient(#ffd54f var(--pct,0%), rgba(255,255,255,.15) 0);
+    z-index: 16; pointer-events: auto;
+  }
+  #rocketBtn.hidden { display: none !important; }
+  #rocketBtnInner {
+    width: 100%; height: 100%; border-radius: 50%; background: rgba(10,10,14,.78);
+    display: flex; align-items: center; justify-content: center; font-size: 24px; color: #fff;
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #rocketBtn.ready #rocketBtnInner { box-shadow: 0 0 10px 3px rgba(255,213,79,.85) inset; }
+  #rocketBtn.ready { animation: rocketPulse .9s infinite; }
+  @keyframes rocketPulse {
+    0%, 100% { transform: translateX(-50%) scale(1); }
+    50% { transform: translateX(-50%) scale(1.08); }
+  }
   .pedal-btn {
-    width: 54px; height: 54px; border-radius: 50%; border: 2px solid rgba(255,255,255,.28);
-    background: rgba(255,255,255,.08); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
-    color: #fff; font-size: 20px; display: flex; align-items: center; justify-content: center;
-    pointer-events: auto; user-select: none; opacity: .85;
+    width: 92px; height: 58px; border-radius: 18px; border: 2px solid rgba(255,255,255,.3);
+    background: rgba(255,255,255,.12); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+    color: #fff; font-size: 26px; display: flex; align-items: center; justify-content: center;
+    pointer-events: auto; user-select: none;
   }
   .pedal-btn:active { background: rgba(255,255,255,.26); transform: scale(0.92); }
 
@@ -165,13 +171,10 @@
     <button class="ghost" id="pauseRestartBtn">Заново</button>
     <button class="ghost" id="pauseHomeBtn">На главную</button>
   </div>
+  <button id="rocketBtn" class="hidden"><div id="rocketBtnInner">🚀</div></button>
   <div id="pedalControls" class="hidden">
     <button id="btnBrake" class="pedal-btn">▼</button>
     <button id="btnGas" class="pedal-btn">▲</button>
-  </div>
-  <div id="touchControls" class="hidden">
-    <button id="btnLeft" class="dir-btn">◀</button>
-    <button id="btnRight" class="dir-btn">▶</button>
   </div>
   <div id="liveCompare" class="hidden"></div>
 
@@ -375,6 +378,7 @@
   const LIGHT_CYCLE = 9, LIGHT_GREEN_END = 5.0, LIGHT_YELLOW_END = 5.6;
   const WALK_START = 6.0, WALK_END = 8.6;
   const KNOCK_DURATION = 0.55;
+  const ROCKET_PASSIVE_RATE = 100/55; // full charge from driving alone in ~55s
 
   function playerCarSize(){
     const cfg = CAR_LEVELS[save.knownLevel] || CAR_LEVELS[0];
@@ -516,6 +520,7 @@
   function sfxKnock(){ beep(140,0.16,'square',0.2); noiseBurst(0.12,0.15); }
   function sfxBad(){ beep(200,0.18,'sawtooth',0.12); beep(150,0.18,'sawtooth',0.1,0.08); }
   function sfxCrossReward(){ beep(880,0.1,'triangle',0.12); beep(1180,0.14,'triangle',0.12,0.09); }
+  function sfxRocket(){ noiseBurst(0.35,0.38); beep(160,0.3,'sawtooth',0.2); beep(90,0.35,'sawtooth',0.16,0.08); }
 
   // quiet, simple engine hum: sine wave + lowpass filter, low gain (no harsh buzz)
   let engineOsc = null, engineGain = null, engineFilter = null;
@@ -695,6 +700,7 @@
       scoreMult: 1, scoreMultTimer: 0,
       fogged: 0, reversed: 0,
       shakeTimer: 0,
+      rocketCharge: 0, rocketFxTimer: 0,
       traffic: [],
       bonuses: [],
       trees: [],
@@ -771,14 +777,14 @@
     }
   }
 
-  const GOOD_TYPES = ['nitro','shield','multiplier','heart'];
+  const GOOD_TYPES = ['nitro','shield','multiplier','heart','rocket'];
   const BAD_TYPES = ['fog','reverse'];
   const BONUS_ICON = {
-    nitro:'⚡', shield:'🛡️', multiplier:'⭐', heart:'❤️',
+    nitro:'⚡', shield:'🛡️', multiplier:'⭐', heart:'❤️', rocket:'🚀',
     fog:'🌫️', reverse:'🛢️'
   };
   const BONUS_LABEL = {
-    nitro:'НИТРО', shield:'ЩИТ', multiplier:'x2 ОЧКИ', heart:'+1 ЖИЗНЬ',
+    nitro:'НИТРО', shield:'ЩИТ', multiplier:'x2 ОЧКИ', heart:'+1 ЖИЗНЬ', rocket:'+ЗАРЯД РАКЕТЫ',
     fog:'ТУМАН', reverse:'ОСТОРОЖНО МАСЛО'
   };
   const BONUS_R = 27;
@@ -907,13 +913,6 @@
   }, {passive:false});
   canvas.addEventListener('mousedown', (e)=>{ handleTouch(e.clientX); });
 
-  const btnLeftEl = document.getElementById('btnLeft');
-  const btnRightEl = document.getElementById('btnRight');
-  btnLeftEl.addEventListener('touchstart', (e)=>{ e.preventDefault(); pressLane(-1); }, {passive:false});
-  btnLeftEl.addEventListener('mousedown', (e)=>{ e.preventDefault(); pressLane(-1); });
-  btnRightEl.addEventListener('touchstart', (e)=>{ e.preventDefault(); pressLane(1); }, {passive:false});
-  btnRightEl.addEventListener('mousedown', (e)=>{ e.preventDefault(); pressLane(1); });
-
   function setPedal(key, val){
     if (!state) return;
     if (val && !canControl()) return;
@@ -933,6 +932,10 @@
   btnBrakeEl.addEventListener('mousedown', (e)=>{ e.preventDefault(); setPedal('arrowdown', true); });
   btnBrakeEl.addEventListener('mouseup', (e)=>{ setPedal('arrowdown', false); });
   btnBrakeEl.addEventListener('mouseleave', (e)=>{ setPedal('arrowdown', false); });
+
+  const rocketBtnEl = document.getElementById('rocketBtn');
+  rocketBtnEl.addEventListener('touchstart', (e)=>{ e.preventDefault(); triggerRocket(); }, {passive:false});
+  rocketBtnEl.addEventListener('mousedown', (e)=>{ e.preventDefault(); triggerRocket(); });
 
   // ---------- COLLISION / EFFECTS ----------
   function triggerFlash(color){
@@ -984,6 +987,26 @@
     if (!s.demo) sfxKnock();
   }
 
+  function triggerRocket(){
+    if (!canControl() || !state || state.rocketCharge < 100) return;
+    state.rocketCharge = 0;
+    state.rocketFxTimer = 0.5;
+    state.invuln = Math.max(state.invuln, 1.1);
+    state.shakeTimer = Math.max(state.shakeTimer, 0.3);
+    triggerFlash('#ffb74d');
+    let count = 0;
+    for (const c of state.traffic){
+      if (!c.knocked && Math.abs(c.z) < 950){
+        c.knocked = true;
+        c.knockDir = laneX(c.lane) >= laneX(state.laneAnim) ? 1 : -1;
+        c.knockTimer = KNOCK_DURATION;
+        count++;
+      }
+    }
+    if (count > 0) spawnPopup(state, laneX(state.laneAnim), playerScreenY()-60, 'РАКЕТА! ТРАФИК РАССЕЯН', '#ffd54f');
+    if (!state.demo) sfxRocket();
+  }
+
   function spawnPopup(s, x, y, text, color){
     s.popups.push({ x, y, text, color: color||'#fff', timer: 1.1 });
   }
@@ -994,6 +1017,7 @@
       case 'shield': s.shieldTimer = 5.5; if (!s.demo) sfxShieldOn(); break;
       case 'multiplier': s.scoreMult = 2; s.scoreMultTimer = 6; if (!s.demo) sfxCoin(); break;
       case 'heart': s.hearts = Math.min(s.maxHearts, s.hearts + 1); if (!s.demo) sfxShieldOn(); break;
+      case 'rocket': s.rocketCharge = Math.min(100, s.rocketCharge + 35); if (!s.demo) sfxShieldOn(); break;
       case 'fog': s.fogged = 4; if (!s.demo) sfxBad(); break;
       case 'reverse': s.reversed = 4; if (!s.demo) sfxBad(); break;
     }
@@ -1051,6 +1075,8 @@
     if (s.fogged > 0) s.fogged -= dt;
     if (s.reversed > 0) s.reversed -= dt;
     if (s.shakeTimer > 0) s.shakeTimer -= dt;
+    if (s.rocketFxTimer > 0) s.rocketFxTimer -= dt;
+    if (!s.demo) s.rocketCharge = Math.min(100, s.rocketCharge + dt * ROCKET_PASSIVE_RATE);
 
     s.waveTimer -= dt;
     const waveInterval = Math.max(1.05, 2.0 - s.distance*0.00028) * (s.waveIntervalMult||1);
@@ -1441,23 +1467,44 @@
 
   function drawMotoBody(w, h, bodyColor){
     ctx.fillStyle = 'rgba(0,0,0,.25)';
-    ctx.beginPath(); ctx.ellipse(2, h*0.1, w*0.55, h*0.42, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(2, h*0.08, w*0.5, h*0.44, 0, 0, Math.PI*2); ctx.fill();
 
-    ctx.fillStyle = '#1a1a1a';
-    roundRect(-w*0.14, -h*0.42, w*0.28, h*0.22, 4); ctx.fill();
-    roundRect(-w*0.14, h*0.2, w*0.28, h*0.22, 4); ctx.fill();
+    // two round wheels (front + rear) -- reads as a motorcycle, not a capsule
+    const wheelR = w*0.30;
+    [[0,-h*0.36],[0,h*0.36]].forEach(([wx,wy])=>{
+      ctx.fillStyle = '#161616';
+      ctx.beginPath(); ctx.arc(wx,wy,wheelR,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#5a5a5a';
+      ctx.beginPath(); ctx.arc(wx,wy,wheelR*0.42,0,Math.PI*2); ctx.fill();
+    });
 
+    // fuel tank / frame connecting the wheels
     const bg = ctx.createLinearGradient(-w/2,-h/2,w/2,h/2);
     bg.addColorStop(0, lighten(bodyColor, 18));
     bg.addColorStop(0.55, bodyColor);
     bg.addColorStop(1, darken(bodyColor, 16));
     ctx.fillStyle = bg;
-    ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.lineWidth = 1.4;
-    roundRect(-w*0.28, -h*0.32, w*0.56, h*0.64, 8);
+    ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    ctx.moveTo(0, -h*0.44);
+    ctx.quadraticCurveTo(w*0.22, -h*0.12, w*0.16, h*0.10);
+    ctx.quadraticCurveTo(w*0.12, h*0.30, 0, h*0.44);
+    ctx.quadraticCurveTo(-w*0.12, h*0.30, -w*0.16, h*0.10);
+    ctx.quadraticCurveTo(-w*0.22, -h*0.12, 0, -h*0.44);
+    ctx.closePath();
     ctx.fill(); ctx.stroke();
 
-    ctx.fillStyle = '#222';
-    ctx.beginPath(); ctx.arc(0, -h*0.18, w*0.24, 0, Math.PI*2); ctx.fill();
+    // handlebar
+    ctx.strokeStyle = '#222'; ctx.lineWidth = 2.4; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-w*0.26, -h*0.28); ctx.lineTo(w*0.26, -h*0.28); ctx.stroke();
+
+    // rider: jacket/shoulders + helmet with visor
+    ctx.fillStyle = 'rgba(25,25,25,.88)';
+    roundRect(-w*0.20, -h*0.06, w*0.40, h*0.26, 6); ctx.fill();
+    ctx.fillStyle = '#2b2b2b';
+    ctx.beginPath(); ctx.arc(0, -h*0.15, w*0.20, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = 'rgba(120,190,255,.5)';
+    ctx.beginPath(); ctx.ellipse(0, -h*0.17, w*0.12, w*0.07, 0, 0, Math.PI*2); ctx.fill();
 
     ctx.fillStyle = '#fff7c2';
     ctx.beginPath(); ctx.arc(0, -h/2+3, 2.6, 0, Math.PI*2); ctx.fill();
@@ -1817,6 +1864,16 @@
       ctx.fill();
     }
 
+    if (s.rocketFxTimer > 0){
+      const rp = 1 - s.rocketFxTimer/0.5;
+      const rad = 40 + rp*Math.max(W,H)*0.9;
+      const rg = ctx.createRadialGradient(px,py,10,px,py,rad);
+      rg.addColorStop(0, 'rgba(255,183,77,'+(0.55*(1-rp))+')');
+      rg.addColorStop(1, 'rgba(255,183,77,0)');
+      ctx.fillStyle = rg;
+      ctx.beginPath(); ctx.arc(px,py,rad,0,Math.PI*2); ctx.fill();
+    }
+
     if (s.nitroTimer > 0){
       ctx.strokeStyle = 'rgba(255,255,255,.32)';
       ctx.lineWidth = 2;
@@ -1873,6 +1930,10 @@
     if (s.reversed > 0) effHtml += '<span class="effect-pill">🔀 реверс</span>';
     hud.effects.innerHTML = effHtml;
 
+    const rocketPct = Math.floor(Math.min(100, s.rocketCharge||0));
+    rocketBtnEl.style.setProperty('--pct', rocketPct + '%');
+    rocketBtnEl.classList.toggle('ready', rocketPct >= 100);
+
     const curScore = Math.floor(s.score);
     if (curScore > save.bestScore){
       liveCompareEl.innerHTML = '🏆 Рекорд: ' + save.bestScore + ' · Сейчас: <span style="color:#ffd54f;">' + curScore + ' 🔥</span>';
@@ -1885,7 +1946,6 @@
   let paused = false;
   const pauseBtnEl = document.getElementById('pauseBtn');
   const pauseScreen = document.getElementById('pauseScreen');
-  const touchControlsEl = document.getElementById('touchControls');
   const pedalControlsEl = document.getElementById('pedalControls');
 
   function canControl(){ return state && state.running && mode === 'playing' && !paused; }
@@ -1918,8 +1978,8 @@
     mode = 'menu';
     hudEl.classList.add('hidden');
     pauseBtnEl.classList.add('hidden');
-    touchControlsEl.classList.add('hidden');
     pedalControlsEl.classList.add('hidden');
+    rocketBtnEl.classList.add('hidden');
     liveCompareEl.classList.add('hidden');
     stopEngine();
     saveSave();
@@ -1985,8 +2045,8 @@
     paused = false;
     hudEl.classList.add('hidden');
     pauseBtnEl.classList.add('hidden');
-    touchControlsEl.classList.add('hidden');
     pedalControlsEl.classList.add('hidden');
+    rocketBtnEl.classList.add('hidden');
     liveCompareEl.classList.add('hidden');
     pauseScreen.classList.add('hidden');
     stopEngine();
@@ -2021,8 +2081,8 @@
     state.running = true;
     hudEl.classList.remove('hidden');
     pauseBtnEl.classList.remove('hidden');
-    touchControlsEl.classList.remove('hidden');
     pedalControlsEl.classList.remove('hidden');
+    rocketBtnEl.classList.remove('hidden');
     liveCompareEl.classList.remove('hidden');
     pauseScreen.classList.add('hidden');
     startScreen.classList.add('hidden');
