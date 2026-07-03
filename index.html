@@ -2,15 +2,16 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>KARacing</title>
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+  button { margin: 0; font-family: inherit; }
   html, body {
     margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
     background: #111; font-family: 'Segoe UI', Arial, sans-serif; touch-action: none;
   }
-  #wrap { position: relative; width: 100vw; height: 100vh; }
+  #wrap { position: relative; width: 100vw; height: 100vh; height: 100dvh; overflow: hidden; }
   canvas { display: block; width: 100%; height: 100%; background: #3a7d3a; }
 
   #hud {
@@ -112,13 +113,13 @@
   #pauseBtn.hidden { display: none !important; }
 
   #pedalControls {
-    position: absolute; bottom: 20px; left: 0; right: 0; display: flex;
+    position: absolute; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); left: 0; right: 0; display: flex;
     justify-content: center; gap: 26px; padding: 0 26px; pointer-events: none; z-index: 15;
   }
   #pedalControls.hidden { display: none !important; }
 
   #rocketBtn {
-    position: absolute; bottom: 106px; left: 50%; transform: translateX(-50%);
+    position: absolute; bottom: calc(150px + env(safe-area-inset-bottom, 0px)); right: 16px;
     width: 62px; height: 62px; border-radius: 50%; padding: 4px; border: none; cursor: pointer;
     background: conic-gradient(#ffd54f var(--pct,0%), rgba(255,255,255,.15) 0);
     z-index: 16; pointer-events: auto;
@@ -132,8 +133,8 @@
   #rocketBtn.ready #rocketBtnInner { box-shadow: 0 0 10px 3px rgba(255,213,79,.85) inset; }
   #rocketBtn.ready { animation: rocketPulse .9s infinite; }
   @keyframes rocketPulse {
-    0%, 100% { transform: translateX(-50%) scale(1); }
-    50% { transform: translateX(-50%) scale(1.08); }
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.08); }
   }
   .pedal-btn {
     width: 92px; height: 58px; border-radius: 18px; border: 2px solid rgba(255,255,255,.3);
@@ -244,14 +245,21 @@
   const flashEl = document.getElementById('flash');
   const levelToastEl = document.getElementById('levelToast');
 
+  const wrapEl = document.getElementById('wrap');
   let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
   function resize(){
+    // use the real visible viewport (window.innerHeight), not CSS 100vh, which on mobile
+    // browsers can include space hidden behind the collapsing address bar and push
+    // bottom-anchored UI (pedals/rocket button) below the visible fold
     W = window.innerWidth; H = window.innerHeight;
+    wrapEl.style.width = W + 'px';
+    wrapEl.style.height = H + 'px';
     canvas.width = W * DPR; canvas.height = H * DPR;
     canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
     ctx.setTransform(DPR,0,0,DPR,0,0);
   }
   window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', resize);
   resize();
 
   // ---------- SAVE / CAR PROGRESSION (auto-levels from total coins collected) ----------
