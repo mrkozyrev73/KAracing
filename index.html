@@ -357,9 +357,9 @@
 
   // ---------- DIFFICULTY ----------
   const DIFFICULTIES = {
-    easy:   { hearts: 3, speedFactor: 0.72, maxBlockedLanes: 2, waveIntervalMult: 1.7 },
-    medium: { hearts: 2, speedFactor: 1.00, maxBlockedLanes: 3, waveIntervalMult: 1.00 },
-    hard:   { hearts: 1, speedFactor: 1.25, maxBlockedLanes: 3, waveIntervalMult: 0.80 },
+    easy:   { hearts: 3, speedFactor: 0.72, maxBlockedLanes: 2, waveIntervalMult: 1.7, laneChangeRate: 0 },
+    medium: { hearts: 2, speedFactor: 1.00, maxBlockedLanes: 3, waveIntervalMult: 1.00, laneChangeRate: 0.045 },
+    hard:   { hearts: 1, speedFactor: 1.25, maxBlockedLanes: 3, waveIntervalMult: 0.80, laneChangeRate: 0.09 },
   };
   let selectedDifficulty = 'medium';
   const diffButtons = Array.from(document.querySelectorAll('.diff-btn'));
@@ -697,6 +697,7 @@
       speedFactor: 1,
       maxBlockedLanes: 3,
       waveIntervalMult: 1,
+      laneChangeRate: 0.045,
       currentSpeed: 0,
       lane: 1, targetLane: 1,
       laneAnimFrom: 1, laneAnim: 1, laneAnimStart: 0, laneAnimDur: LANE_CHANGE_DURATION,
@@ -1114,11 +1115,11 @@
       // occasional, modest lane-changing AI: rare, only for lighter vehicles, only mid-distance, only if target lane is clear
       if (c.laneChangeStart != null){
         if (s.elapsed - c.laneChangeStart >= c.laneChangeDur) c.laneChangeStart = null;
-      } else if (LANE_CHANGE_TYPES[c.type] && c.z > 180 && c.z < 850){
+      } else if ((s.laneChangeRate||0) > 0 && LANE_CHANGE_TYPES[c.type] && c.z > 180 && c.z < 850){
         c.laneChangeCooldown = (c.laneChangeCooldown||0) - dt;
         if (c.laneChangeCooldown <= 0){
           c.laneChangeCooldown = 3 + Math.random()*4;
-          if (Math.random() < dt * 0.05){
+          if (Math.random() < dt * s.laneChangeRate){
             const dir = Math.random() < 0.5 ? -1 : 1;
             const target = c.lane + dir;
             if (target >= 0 && target < LANES){
@@ -2086,6 +2087,7 @@
     state.speedFactor = cfg.speedFactor;
     state.maxBlockedLanes = cfg.maxBlockedLanes;
     state.waveIntervalMult = cfg.waveIntervalMult;
+    state.laneChangeRate = cfg.laneChangeRate;
     state.running = true;
     hudEl.classList.remove('hidden');
     pauseBtnEl.classList.remove('hidden');
